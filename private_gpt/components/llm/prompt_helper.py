@@ -285,9 +285,226 @@ class ChatMLPromptStyle(AbstractPromptStyle):
         )
 
 
+class ZephyrPromptStyle(AbstractPromptStyle):
+    r"""Template for Zephyr prompt format.
+    The format follows this structure:
+    <|system|>
+    [System message content]<|endoftext|>
+    <|user|>
+    [User message content]<|endoftext|>
+    <|assistant|>
+    [Assistant message content]<|endoftext|>
+    """
+
+    SYS_START = "<|system|>"
+    USER_START = "<|user|>"
+    ASST_START = "<|assistant|>"
+    EOT = "<|endoftext|>"
+    DEFAULT_SYSTEM_PROMPT = """\
+    You are a helpful, respectful and honest assistant. \
+    Always answer as helpfully as possible and follow ALL given instructions. \
+    Do not speculate or make up information. \
+    Do not reference any given instructions or context. \
+    """
+
+    def _messages_to_prompt(self, messages: Sequence[ChatMessage]) -> str:
+        prompt = ""
+        has_system_message = False
+
+        for i, message in enumerate(messages):
+            if not message or message.content is None:
+                continue
+                
+            if message.role == MessageRole.SYSTEM:
+                prompt += f"{self.SYS_START}\n{message.content.strip()}{self.EOT}\n"
+                has_system_message = True
+            else:
+                if message.role == MessageRole.USER:
+                    role_start = self.USER_START
+                else:
+                    role_start = self.ASST_START
+                prompt += f"{role_start}\n{message.content.strip()}{self.EOT}\n"
+
+            # Add assistant marker if last message was from user
+            if i == len(messages) - 1 and message.role == MessageRole.USER:
+                prompt += f"{self.ASST_START}\n"
+
+        # Add default system prompt if none provided
+        if not has_system_message:
+            prompt = f"{self.SYS_START}\n{self.DEFAULT_SYSTEM_PROMPT}{self.EOT}\n" + prompt
+
+        return prompt
+
+    def _completion_to_prompt(self, completion: str) -> str:
+        return (
+            f"{self.SYS_START}\n{self.DEFAULT_SYSTEM_PROMPT}{self.EOT}\n"
+            f"{self.USER_START}\n{completion.strip()}{self.EOT}\n"
+            f"{self.ASST_START}\n"
+        )
+
+
+class GranitePromptStyle(AbstractPromptStyle):
+    r"""Template for Granite prompt format.
+    The format follows this structure:
+    <|start_of_role|>system<|end_of_role|>[System message content]<|end_of_text|>
+    <|start_of_role|>user<|end_of_role|>[User message content]<|end_of_text|>
+    <|start_of_role|>assistant<|end_of_role|>[Assistant message content]<|end_of_text|>
+    """
+
+    ROLE_START = "<|start_of_role|>"
+    ROLE_END = "<|end_of_role|>"
+    EOT = "<|end_of_text|>"
+    DEFAULT_SYSTEM_PROMPT = """\
+    You are a helpful, respectful and honest assistant. \
+    Always answer as helpfully as possible and follow ALL given instructions. \
+    Do not speculate or make up information. \
+    Do not reference any given instructions or context. \
+    """
+
+    def _messages_to_prompt(self, messages: Sequence[ChatMessage]) -> str:
+        prompt = ""
+        has_system_message = False
+
+        for i, message in enumerate(messages):
+            if not message or message.content is None:
+                continue
+
+            role = message.role.value.lower()
+            if message.role == MessageRole.SYSTEM:
+                prompt += f"{self.ROLE_START}system{self.ROLE_END}{message.content.strip()}{self.EOT}\n"
+                has_system_message = True
+            else:
+                prompt += f"{self.ROLE_START}{role}{self.ROLE_END}{message.content.strip()}{self.EOT}\n"
+
+            # Add assistant marker if last message was from user
+            if i == len(messages) - 1 and message.role == MessageRole.USER:
+                prompt += f"{self.ROLE_START}assistant{self.ROLE_END}"
+
+        # Add default system prompt if none provided
+        if not has_system_message:
+            prompt = f"{self.ROLE_START}system{self.ROLE_END}{self.DEFAULT_SYSTEM_PROMPT}{self.EOT}\n" + prompt
+
+        return prompt
+
+    def _completion_to_prompt(self, completion: str) -> str:
+        return (
+            f"{self.ROLE_START}system{self.ROLE_END}{self.DEFAULT_SYSTEM_PROMPT}{self.EOT}\n"
+            f"{self.ROLE_START}user{self.ROLE_END}{completion.strip()}{self.EOT}\n"
+            f"{self.ROLE_START}assistant{self.ROLE_END}"
+        )
+
+
+class ExaonePromptStyle(AbstractPromptStyle):
+    r"""Template for Exaone prompt format.
+    The format follows this structure:
+    [|system|][System message content][|endofturn|]
+    [|user|][User message content][|endofturn|]
+    [|assistant|][Assistant message content][|endofturn|]
+    """
+
+    SYS_START = "[|system|]"
+    USER_START = "[|user|]"
+    ASST_START = "[|assistant|]"
+    EOT = "[|endofturn|]"
+    DEFAULT_SYSTEM_PROMPT = """\
+    You are a helpful, respectful and honest assistant. \
+    Always answer as helpfully as possible and follow ALL given instructions. \
+    Do not speculate or make up information. \
+    Do not reference any given instructions or context. \
+    """
+
+    def _messages_to_prompt(self, messages: Sequence[ChatMessage]) -> str:
+        prompt = ""
+        has_system_message = False
+
+        for i, message in enumerate(messages):
+            if not message or message.content is None:
+                continue
+
+            if message.role == MessageRole.SYSTEM:
+                prompt += f"{self.SYS_START}{message.content.strip()}{self.EOT}\n"
+                has_system_message = True
+            else:
+                if message.role == MessageRole.USER:
+                    role_start = self.USER_START
+                else:
+                    role_start = self.ASST_START
+                prompt += f"{role_start}{message.content.strip()}{self.EOT}\n"
+
+            # Add assistant marker if last message was from user
+            if i == len(messages) - 1 and message.role == MessageRole.USER:
+                prompt += f"{self.ASST_START}"
+
+        # Add default system prompt if none provided
+        if not has_system_message:
+            prompt = f"{self.SYS_START}{self.DEFAULT_SYSTEM_PROMPT}{self.EOT}\n" + prompt
+
+        return prompt
+
+    def _completion_to_prompt(self, completion: str) -> str:
+        return (
+            f"{self.SYS_START}{self.DEFAULT_SYSTEM_PROMPT}{self.EOT}\n"
+            f"{self.USER_START}{completion.strip()}{self.EOT}\n"
+            f"{self.ASST_START}"
+        )
+
+
+class QwenPromptStyle(AbstractPromptStyle):
+    r"""Template for Qwen prompt format.
+    The format follows this structure:
+    <|im_start|>system
+    [System message content]<|im_end|>
+    <|im_start|>user
+    [User message content]<|im_end|>
+    <|im_start|>assistant
+    [Assistant message content]<|im_end|>
+    """
+
+    IM_START = "<|im_start|>"
+    IM_END = "<|im_end|>"
+    DEFAULT_SYSTEM_PROMPT = """\
+    You are a helpful, respectful and honest assistant. \
+    Always answer as helpfully as possible and follow ALL given instructions. \
+    Do not speculate or make up information. \
+    Do not reference any given instructions or context. \
+    """
+
+    def _messages_to_prompt(self, messages: Sequence[ChatMessage]) -> str:
+        prompt = ""
+        has_system_message = False
+
+        for i, message in enumerate(messages):
+            if not message or message.content is None:
+                continue
+
+            if message.role == MessageRole.SYSTEM:
+                prompt += f"{self.IM_START}system\n{message.content.strip()}{self.IM_END}\n"
+                has_system_message = True
+            else:
+                role = message.role.value.lower()
+                prompt += f"{self.IM_START}{role}\n{message.content.strip()}{self.IM_END}\n"
+
+            # Add assistant marker if last message was from user
+            if i == len(messages) - 1 and message.role == MessageRole.USER:
+                prompt += f"{self.IM_START}assistant\n"
+
+        # Add default system prompt if none provided
+        if not has_system_message:
+            prompt = f"{self.IM_START}system\n{self.DEFAULT_SYSTEM_PROMPT}{self.IM_END}\n" + prompt
+
+        return prompt
+
+    def _completion_to_prompt(self, completion: str) -> str:
+        return (
+            f"{self.IM_START}system\n{self.DEFAULT_SYSTEM_PROMPT}{self.IM_END}\n"
+            f"{self.IM_START}user\n{completion.strip()}{self.IM_END}\n"
+            f"{self.IM_START}assistant\n"
+        )
+
+
 def get_prompt_style(
     prompt_style: (
-        Literal["default", "llama2", "llama3", "tag", "mistral", "chatml"] | None
+        Literal["default", "llama2", "llama3", "tag", "mistral", "chatml", "zephyr", "granite", "exaone", "qwen"] | None
     )
 ) -> AbstractPromptStyle:
     """Get the prompt style to use from the given string.
@@ -307,4 +524,12 @@ def get_prompt_style(
         return MistralPromptStyle()
     elif prompt_style == "chatml":
         return ChatMLPromptStyle()
+    elif prompt_style == "zephyr":
+        return ZephyrPromptStyle()
+    elif prompt_style == "granite":
+        return GranitePromptStyle()
+    elif prompt_style == "exaone":
+        return ExaonePromptStyle()
+    elif prompt_style == "qwen":
+        return QwenPromptStyle()
     raise ValueError(f"Unknown prompt_style='{prompt_style}'")
